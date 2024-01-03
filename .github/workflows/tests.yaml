@@ -17,7 +17,7 @@ jobs:
         run: pip install -r requirements.txt
       - name: Lint with Flake8
         shell: bash
-        run: flake8 kubectl/*.py
+        run: flake8 github/*.py
       - name: Lint with PyLint
         shell: bash
-        run: pylint kubectl/*.py
+        run: pylint github/*.py
