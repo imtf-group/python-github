@@ -1,0 +1,23 @@
+name: Lint
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        shell: bash
+        run: sudo python setup.py install
+      - name: Install dev dependencies
+        shell: bash
+        run: pip install -r requirements.txt
+      - name: Lint with Flake8
+        shell: bash
+        run: flake8 kubectl/*.py
+      - name: Lint with PyLint
+        shell: bash
+        run: pylint kubectl/*.py
