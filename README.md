@@ -2,6 +2,8 @@
 
 # github
 
+Module to interface with GitHub API
+
 <a id="github.GitHubRequests"></a>
 
 ## GitHubRequests Objects

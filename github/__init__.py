@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+"""Module to interface with GitHub API"""
 
 import os
 import json
