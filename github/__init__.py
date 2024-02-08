@@ -255,12 +255,13 @@ class GitHubRepository(GitHubRequests):
                     break
         return job_id
 
-    def export_variables(self, url: str, prefix: str, output: str):
+    def export_variables(self, url: str, workflow: str, output: str, prefix: str = None):
         """Extract variables from artifacts and fill a file with the variables
         :param url: Remote artifact URL
-        :param prefix: variable name prefix
-        :param output: Local file name where the variables are exported"""
-        repo_name = self.repository.split('/')[-1]
+        :param workflow: variable name workflow
+        :param output: Local file name where the variables are exported
+        :param prefix: exported variable prefix"""
+        prefix = prefix or self.repository.split('/')[-1]
         zip_file_name = f'{str(uuid.uuid4())}.zip'
         with tempfile.TemporaryDirectory() as tmpdirname:
             self.download(url, os.path.join(tmpdirname, zip_file_name))
@@ -274,7 +275,7 @@ class GitHubRepository(GitHubRequests):
                     with open(os.path.join(tree_struct[0], file), encoding='utf-8') as fd:
                         value = fd.read().split('\n')[0].rstrip()
                     with open(output, mode="a", encoding='utf-8') as fd:
-                        for var_prefix in (f"{repo_name}_{prefix}", repo_name):
+                        for var_prefix in (f"{prefix}_{workflow}", prefix):
                             key = f"{var_prefix}_{file}".upper().replace(
                                 '.', '_').replace('/', '_').replace('-', '_')
                             fd.write(f"{key}={value}\n")
