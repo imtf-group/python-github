@@ -3,9 +3,12 @@
 import os
 import json
 import time
+import types
 import uuid
+import shutil
 import zipfile
 import tempfile
+import base64
 from datetime import datetime
 import requests
 
@@ -20,9 +23,20 @@ class GitHubRequests:
         self._token = token
         self._endpoint = endpoint
         self.debug = debug
+        _content = self._call_api()
+        for k, v in _content.items():
+            setattr(self, k, v)
+
+    def _prepare_url(self, resource: str = None) -> str:
+        url = f"https://api.github.com/{self._endpoint}"
+        if resource is not None:
+            if resource.startswith('/'):
+                resource = resource[1:]
+            url += f"/{resource.replace(' ', '%20')}"
+        return url
 
     # pylint: disable=inconsistent-return-statements
-    def _call_api(self, resource: str, data: dict = None, method: str = 'get') -> dict:
+    def _call_api(self, resource: str = None, data: dict = None, method: str = 'get') -> dict:
         """Request GitHub API (protected)
         :param resource: Resource to reach (prefixed by the class endpoint)
         :param data: Request body (if needed)
@@ -30,12 +44,9 @@ class GitHubRequests:
         :returns: GitHub API JSON Response"""
         if data:
             data = json.dumps(data)
-        if resource.startswith('/'):
-            resource = resource[1:]
-        url = (f"https://api.github.com/{self._endpoint}/" +
-               f"{resource.replace(' ', '%20')}")
+        url = self._prepare_url(resource)
         if self.debug:
-            print(f"call: {url}")
+            print(f"call: {url}, params: {data}")
         response = None
         while True:
             try:
@@ -152,6 +163,19 @@ class GitHubRepository(GitHubRequests):
         :param debug: Debug mode"""
         super().__init__(token, f"repos/{repository}", debug)
         self.repository = repository
+
+    def clone(self, destination: str = None, ref: str = None):
+        destination = destination or os.path.join(os.getcwd(), self.repository)
+        ref = ref or self.default_branch
+        archive_dir = None
+        with tempfile.NamedTemporaryFile(suffix=".zip") as temp_file:
+            self.download(self._prepare_url(f"/zipball/{ref}"), temp_file.name)
+            with zipfile.ZipFile(temp_file.name, 'r') as zip_ref:
+                archive_dir = zip_ref.namelist()[0].split('/')[0]
+                zip_ref.extractall(destination)
+        shutil.copytree(os.path.join(destination, archive_dir), destination,
+                        dirs_exist_ok=True)
+        shutil.rmtree(os.path.join(destination, archive_dir))
 
     def list_runs(self, **kwargs) -> dict:
         """List repository action runs (generator to handle pagination)
@@ -279,3 +303,53 @@ class GitHubRepository(GitHubRequests):
                             key = f"{var_prefix}_{file}".upper().replace(
                                 '.', '_').replace('/', '_').replace('-', '_')
                             fd.write(f"{key}={value}\n")
+
+
+    def create_pull_request(self, branch: str, commit_message: str,
+                            files: dict, target_branch: str = None) -> str:
+        '''
+        files are a dict of {path: content}
+        '''
+        _payload = []
+        for _path, _content in files.items():
+            _b64_content = base64.b64encode(_content.encode('utf-8')).decode()
+            _sha = self._call_api(
+                '/git/blobs',
+                method='post',
+                data={'content': _b64_content, 'encoding': 'base64'})['sha']
+            _payload += [{
+                'path': _path, 'mode': '100644',
+                'type': 'blob', 'sha': _sha}]
+        
+        if not target_branch:
+            target_branch = self._call_api()['default_branch']
+        _target_sha = self._call_api(f"/git/trees/{target_branch}")['sha']
+        _branch_payload = {'ref': f"refs/heads/{branch}", "sha": _target_sha}
+        _branch = self._call_api(
+            "/git/refs",
+            data={'ref': f"refs/heads/{branch}", "sha": _target_sha},
+            method='post')
+        _tree_sha = self._call_api(
+            "/git/trees",
+            data={'tree': _payload, 'base_tree': _branch['object']['sha']},
+            method='post')['sha']
+        _commit_sha = self._call_api(
+            "/git/commits",
+            method='post',
+            data={
+                'tree': _tree_sha,
+                'message': commit_message,
+                'parents': [_branch['object']['sha']]})['sha']
+        self._call_api(
+            f"/git/refs/heads/{branch}",
+            method='patch',
+            data={'sha': _commit_sha})
+        _pr = self._call_api(
+            "/pulls",
+            method='post',
+            data={
+                'title': commit_message,
+                'body': commit_message,
+                'head': branch,
+                'base': target_branch})
+        return _pr['html_url']
