@@ -311,6 +311,7 @@ class GitHubRepository(GitHubRequests):
         files are a dict of {path: content}
         '''
         _payload = []
+        target_branch = target_branch or self.default_branch
         for _path, _content in files.items():
             _b64_content = base64.b64encode(_content.encode('utf-8')).decode()
             _sha = self._call_api(
@@ -321,8 +322,6 @@ class GitHubRepository(GitHubRequests):
                 'path': _path, 'mode': '100644',
                 'type': 'blob', 'sha': _sha}]
         
-        if not target_branch:
-            target_branch = self._call_api()['default_branch']
         _target_sha = self._call_api(f"/git/trees/{target_branch}")['sha']
         _branch_payload = {'ref': f"refs/heads/{branch}", "sha": _target_sha}
         _branch = self._call_api(
