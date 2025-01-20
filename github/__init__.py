@@ -226,7 +226,7 @@ class GitHubRepository(GitHubRequests):
         """Get a specific pull request info
         :param branch: pull request number
         :returns: pull request info (JSON format)"""
-        return self._call_api(f"/pull/{number}")
+        return self._call_api(f"/pulls/{number}")
 
     def browse(self, path: str) -> dict:
         """Browse the repository file structure on the default branch
