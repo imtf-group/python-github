@@ -222,6 +222,12 @@ class GitHubRepository(GitHubRequests):
         :returns: commit info (JSON format)"""
         return self._call_api(f"/commits/{branch}")
 
+    def get_pull_request(self, number: int) -> dict:
+        """Get a specific pull request info
+        :param branch: pull request number
+        :returns: pull request info (JSON format)"""
+        return self._call_api(f"/pull/{number}")
+
     def browse(self, path: str) -> dict:
         """Browse the repository file structure on the default branch
         :param path: Path to browse
