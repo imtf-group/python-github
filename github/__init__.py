@@ -9,6 +9,8 @@ import shutil
 import zipfile
 import tempfile
 import base64
+import nacl.public
+import nacl.encoding
 from datetime import datetime
 import requests
 
@@ -34,6 +36,15 @@ class GitHubRequests:
                 resource = resource[1:]
             url += f"/{resource.replace(' ', '%20')}"
         return url
+
+    def _encrypt(self, public_key: str, secret_value: str) -> str:
+        """Encrypt a Unicode string using the public key."""
+        public_key = nacl.public.PublicKey(
+            public_key.encode("utf-8"),
+            nacl.encoding.Base64Encoder())
+        sealed_box = nacl.public.SealedBox(public_key)
+        encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
+        return base64.b64encode(encrypted).decode("utf-8")
 
     # pylint: disable=inconsistent-return-statements
     def _call_api(self, resource: str = None, data: dict = None, method: str = 'get') -> dict:
@@ -216,6 +227,39 @@ class GitHubRepository(GitHubRequests):
                 yield _commit
             _page += 1
 
+    def get_deploy_keys(self) -> dict:
+        """Get the deploy keys in a repository
+        :returns: Keys (JSON format)"""
+        return self._call_api("/keys")
+
+    def add_deploy_key(self, title: str, content: str,
+                        write_access: bool = False) -> dict:
+        """Add a new deploy key in a repository
+        :param title: Title
+        :param content: Key content
+        :param write_access: Allow write access
+        :returns: Response (JSON format)"""
+        return self._call_api(
+            "/keys",
+            data={
+                "title": title,
+                "key": content,
+                "read_only": (not write_access)},
+            method="post")
+
+    def add_secret(self, name: str, value: str) -> bool:
+        """Add Secret
+        :param name: variable name to add
+        :param value: secret value
+        :returns: Boolean"""
+        pkey = self._call_api("/actions/secrets/public-key")
+        _encrypted = self._encrypt(pkey['key'], value)
+        self._call_api(
+            f"/actions/secrets/{name}",
+            {"encrypted_value": _encrypted,"key_id": pkey['key_id']},
+            "put")
+        return True
+
     def get_commit(self, branch: str) -> dict:
         """Get the latest commit of a specific branch
         :param branch: branch name
@@ -227,6 +271,26 @@ class GitHubRepository(GitHubRequests):
         :param branch: pull request number
         :returns: pull request info (JSON format)"""
         return self._call_api(f"/pulls/{number}")
+
+    def get_pull_request_reviews(self, number: int) -> dict:
+        """Get a list of pull requests reviewers
+        :param branch: pull request number
+        :returns: pull request reviewers (JSON format)"""
+        return self._call_api(f"/pulls/{number}/reviews")
+
+    def pull_request_approved(self, number: int) -> bool:
+        """Get a list of pull requests reviewers
+        :param branch: pull request number
+        :returns: pull request reviewers (JSON format)"""
+        _reviews = self._call_api(f"/pulls/{number}/reviews")
+        if not _reviews:
+            return False
+        for _review in _reviews:
+            if 'state' not in _review:
+                continue
+            if _review['state'] != 'APPROVED':
+                return False
+        return True
 
     def browse(self, path: str) -> dict:
         """Browse the repository file structure on the default branch
