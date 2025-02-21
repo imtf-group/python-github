@@ -233,6 +233,9 @@ class GitHubRepository(GitHubRequests):
         self.repository = repository
 
     def clone(self, destination: str = None, ref: str = None):
+        """Clone a remote repository locally
+        :param destination: local destination directory
+        :param ref: remote branch or tag to clone"""
         destination = destination or os.path.join(os.getcwd(), self.repository)
         ref = ref or self.default_branch
         archive_dir = None

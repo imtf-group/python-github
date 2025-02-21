@@ -18,6 +18,7 @@
     * [find](#github.GitHubOrganization.find)
   * [GitHubRepository](#github.GitHubRepository)
     * [\_\_init\_\_](#github.GitHubRepository.__init__)
+    * [clone](#github.GitHubRepository.clone)
     * [list\_runs](#github.GitHubRepository.list_runs)
     * [get\_run](#github.GitHubRepository.get_run)
     * [cancel\_run](#github.GitHubRepository.cancel_run)
@@ -283,6 +284,21 @@ Contructor
 - `token`: GitHub token (needs the repo rights)
 - `repository`: repository name
 - `debug`: Debug mode
+
+<a id="github.GitHubRepository.clone"></a>
+
+#### clone
+
+```python
+def clone(destination: str = None, ref: str = None)
+```
+
+Clone a remote repository locally
+
+**Arguments**:
+
+- `destination`: local destination directory
+- `ref`: remote branch or tag to clone
 
 <a id="github.GitHubRepository.list_runs"></a>
 
