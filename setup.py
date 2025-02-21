@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name="python-github",
-    version="0.0.1",
+    version="0.1.0",
     author="Jean-Baptiste Langlois",
     author_email="jean-baptiste.langlois@imtf.com",
     description="Module to interface with GitHub API",
@@ -17,6 +17,7 @@ setup(
     ],
     python_requires='>=3.6',
     install_requires=[
-        'requests>=2.32.3'
+        'requests>=2.32.3',
+        'PyNaCl>=1.5.0'
     ]
 )

@@ -3,15 +3,15 @@
 import os
 import json
 import time
-import types
 import uuid
 import shutil
 import zipfile
 import tempfile
 import base64
+import urllib.parse
+from datetime import datetime
 import nacl.public
 import nacl.encoding
-from datetime import datetime
 import requests
 
 
@@ -25,17 +25,38 @@ class GitHubRequests:
         self._token = token
         self._endpoint = endpoint
         self.debug = debug
-        _content = self._call_api()
-        for k, v in _content.items():
-            setattr(self, k, v)
+        self._content = {}
 
-    def _prepare_url(self, resource: str = None) -> str:
-        url = f"https://api.github.com/{self._endpoint}"
+    def __getattr__(self, key):
+        if not self._content:
+            self._content = self._call_api()
+        if key not in self._content:
+            raise AttributeError(
+                f"'{self.__class__.__name__}' object has no attribute '{key}'")
+        return self._content[key]
+
+    def __dir__(self):
+        if not self._content:
+            self._content = self._call_api()
+        default_attrs = super().__dir__()
+        return list(default_attrs) + list(self._content.keys())
+
+    def _prepare_url(self, resource: str = None, data: str = None) -> str:
+        url = "https://api.github.com"
         if resource is not None:
-            if resource.startswith('/'):
-                resource = resource[1:]
+            resource = resource.replace('//', '/')
             url += f"/{resource.replace(' ', '%20')}"
-        return url
+        _retval = {
+            'url': url,
+            'headers': {
+                'Authorization': f'Bearer {self._token}',
+                'Accept': 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            },
+            'timeout': 3}
+        if data:
+            _retval['data'] = data
+        return _retval
 
     def _encrypt(self, public_key: str, secret_value: str) -> str:
         """Encrypt a Unicode string using the public key."""
@@ -46,6 +67,43 @@ class GitHubRequests:
         encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
         return base64.b64encode(encrypted).decode("utf-8")
 
+    def _execute_request(self, method: str, **kwargs) -> requests.Response:
+        response = None
+        if self.debug:
+            print(f"call: {kwargs}")
+        while True:
+            try:
+                response = getattr(requests, method)(**kwargs)
+                break
+            except requests.exceptions.ReadTimeout:
+                time.sleep(2)
+        # pylint: disable=no-member
+        if response.status_code not in (requests.codes.ok, requests.codes.created):
+            response.raise_for_status()
+        _return_value = response.json()
+        if self.debug:
+            print(f"response: {_return_value}")
+        return _return_value
+
+    def _search_api(self, endpoint: str, query: dict) -> dict:
+        """Request GitHub Search API (protected)
+        :param endpoint: Resource to search for
+        :param query: Query dictionary
+        :returns: GitHub API JSON Response"""
+        _str_query = ' '.join([f"{k}:{v}" if k else v for k, v in query.items()])
+        _page = 1
+        _results = []
+        while True:
+            _args = f"q={urllib.parse.quote_plus(_str_query)}&per_page=100&page={_page}"
+            _request = self._prepare_url(f"search/{endpoint}?{_args}")
+            _return_value = self._execute_request("get", **_request)
+            _return_items = _return_value['items']
+            _results += _return_items
+            if _page == 10 or not _return_items:
+                break
+            _page += 1
+        return _results
+
     # pylint: disable=inconsistent-return-statements
     def _call_api(self, resource: str = None, data: dict = None, method: str = 'get') -> dict:
         """Request GitHub API (protected)
@@ -55,46 +113,18 @@ class GitHubRequests:
         :returns: GitHub API JSON Response"""
         if data:
             data = json.dumps(data)
-        url = self._prepare_url(resource)
-        if self.debug:
-            print(f"call: {url}, params: {data}")
-        response = None
-        while True:
-            try:
-                response = getattr(requests, method.lower())(
-                    url,
-                    data=data,
-                    headers={
-                        'Authorization': f'Bearer {self._token}',
-                        'Accept': 'application/vnd.github+json',
-                        'X-GitHub-Api-Version': '2022-11-28'
-                    },
-                    timeout=3)
-                break
-            except requests.exceptions.ReadTimeout:
-                time.sleep(2)
-        # pylint: disable=no-member
-        if response.status_code in (requests.codes.ok, requests.codes.created):
-            return_value = response.json()
-            if self.debug:
-                print(f"response: {return_value}")
-            return return_value
-        response.raise_for_status()
+        _endpoint = self._endpoint
+        if resource:
+            _endpoint += f"/{resource}"
+        _request = self._prepare_url(_endpoint, data)
+        return self._execute_request(method.lower(), **_request)
 
     def download(self, url: str, output_file: str):
         """Download object from GitHub
         :param url: URL
         :param output_file: local file name"""
-        if self.debug:
-            print(f"call: {url}")
-        response = requests.get(
-            url,
-            headers={
-                'Authorization': f'Bearer {self._token}',
-                'Accept': 'application/vnd.github+json',
-                'X-GitHub-Api-Version': '2022-11-28'
-            },
-            timeout=3)
+        _request = self._prepare_url(url)
+        response = requests.get(**_request)
         totalbits = 0
         if response.status_code == 200:
             with open(output_file, 'wb') as f:
@@ -141,10 +171,15 @@ class GitHubRequests:
         :returns: runner dict"""
         return self._call_api("/actions/runners")['runners']
 
+    def get_issues(self) -> dict:
+        """List issues
+        :returns: issues dict"""
+        return self._call_api("/issues")
+
 
 class GitHubOrganization(GitHubRequests):
     """Class to manage Organizations via GitHub API"""
-    def __init__(self, token, organization, debug=False):
+    def __init__(self, token: str, organization: str, debug: bool = False):
         """Contructor
         :param token: GitHub token (needs the admin:org rights)
         :param organization: Organization name
@@ -160,14 +195,36 @@ class GitHubOrganization(GitHubRequests):
             _repos = self._call_api(f"/repos?per_page=100&page={_page}")
             if len(_repos) == 0:
                 break
-            for _repo in _repos:
-                yield _repo
+            yield from _repos
             _page += 1
+
+    def get_pull_requests(self, state: str, author: str = None) -> dict:
+        """Get pull requests at organization level
+        :param state: Status (open, closed)
+        :param author: Author (GitHub login)
+        :returns: GitHub API JSON Response"""
+        _query = {'state': state, 'type': 'pr', 'org': self.organization}
+        if author:
+            _query['author'] = author
+        return self._search_api("issues", _query)
+
+    def find(self, pattern: str, path: str = None) -> dict:
+        """Get pull requests at organization level
+        :param state: Status (open, closed)
+        :param author: Author (GitHub login)
+        :returns: GitHub API JSON Response"""
+        _query = {'': pattern, 'org': self.organization, 'in': 'file'}
+        if path:
+            if '/' in path:
+                _query['path'] = path
+            else:
+                _query['filename'] = path
+        return self._search_api("code", _query)
 
 
 class GitHubRepository(GitHubRequests):
     """Class to manage Repositories via GitHub API"""
-    def __init__(self, token, repository, debug=False):
+    def __init__(self, token: str, repository: str, debug: bool = False):
         """Contructor
         :param token: GitHub token (needs the repo rights)
         :param repository: repository name
@@ -198,8 +255,7 @@ class GitHubRepository(GitHubRequests):
                 f"/actions/runs?per_page=100&page={_page}&{_param}")
             if len(_runs['workflow_runs']) == 0:
                 break
-            for _run in _runs['workflow_runs']:
-                yield _run
+            yield from _runs['workflow_runs']
             _page += 1
 
     def get_run(self, run_id: int) -> dict:
@@ -223,8 +279,7 @@ class GitHubRepository(GitHubRequests):
             _commits = self._call_api(f"/commits?per_page=100&page={_page}")
             if len(_commits) == 0:
                 break
-            for _commit in _commits:
-                yield _commit
+            yield from _commits
             _page += 1
 
     def get_deploy_keys(self) -> dict:
@@ -233,7 +288,7 @@ class GitHubRepository(GitHubRequests):
         return self._call_api("/keys")
 
     def add_deploy_key(self, title: str, content: str,
-                        write_access: bool = False) -> dict:
+                       write_access: bool = False) -> dict:
         """Add a new deploy key in a repository
         :param title: Title
         :param content: Key content
@@ -247,18 +302,19 @@ class GitHubRepository(GitHubRequests):
                 "read_only": (not write_access)},
             method="post")
 
-    def add_secret(self, name: str, value: str) -> bool:
+    def add_secret(self, name: str, value: str) -> dict:
         """Add Secret
         :param name: variable name to add
         :param value: secret value
-        :returns: Boolean"""
+        :returns: Secret in JSON format"""
         pkey = self._call_api("/actions/secrets/public-key")
+        print(pkey)
         _encrypted = self._encrypt(pkey['key'], value)
         self._call_api(
             f"/actions/secrets/{name}",
-            {"encrypted_value": _encrypted,"key_id": pkey['key_id']},
+            {"encrypted_value": _encrypted, "key_id": pkey['key_id']},
             "put")
-        return True
+        return {"name": name, "encrypted_value": _encrypted}
 
     def get_commit(self, branch: str) -> dict:
         """Get the latest commit of a specific branch
@@ -271,12 +327,6 @@ class GitHubRepository(GitHubRequests):
         :param branch: pull request number
         :returns: pull request info (JSON format)"""
         return self._call_api(f"/pulls/{number}")
-
-    def get_pull_request_reviews(self, number: int) -> dict:
-        """Get a list of pull requests reviewers
-        :param branch: pull request number
-        :returns: pull request reviewers (JSON format)"""
-        return self._call_api(f"/pulls/{number}/reviews")
 
     def pull_request_approved(self, number: int) -> bool:
         """Get a list of pull requests reviewers
@@ -374,12 +424,14 @@ class GitHubRepository(GitHubRequests):
                                 '.', '_').replace('/', '_').replace('-', '_')
                             fd.write(f"{key}={value}\n")
 
-
     def create_pull_request(self, branch: str, commit_message: str,
                             files: dict, target_branch: str = None) -> str:
-        '''
-        files are a dict of {path: content}
-        '''
+        """Create a pull request
+        :param branch: Source branch
+        :param commit_message: Commit message
+        :param files: Dict of {path: content}
+        :param target_branch: Destination branch (default: default branch)
+        :returns: Pull Request URL"""
         _payload = []
         target_branch = target_branch or self.default_branch
         for _path, _content in files.items():
@@ -391,9 +443,8 @@ class GitHubRepository(GitHubRequests):
             _payload += [{
                 'path': _path, 'mode': '100644',
                 'type': 'blob', 'sha': _sha}]
-        
+
         _target_sha = self._call_api(f"/git/trees/{target_branch}")['sha']
-        _branch_payload = {'ref': f"refs/heads/{branch}", "sha": _target_sha}
         _branch = self._call_api(
             "/git/refs",
             data={'ref': f"refs/heads/{branch}", "sha": _target_sha},

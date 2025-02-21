@@ -1,3 +1,39 @@
+# Table of Contents
+
+* [github](#github)
+  * [GitHubRequests](#github.GitHubRequests)
+    * [\_\_init\_\_](#github.GitHubRequests.__init__)
+    * [download](#github.GitHubRequests.download)
+    * [add\_variable](#github.GitHubRequests.add_variable)
+    * [delete\_variable](#github.GitHubRequests.delete_variable)
+    * [list\_variables](#github.GitHubRequests.list_variables)
+    * [list\_secrets](#github.GitHubRequests.list_secrets)
+    * [delete\_runner](#github.GitHubRequests.delete_runner)
+    * [list\_runners](#github.GitHubRequests.list_runners)
+    * [get\_issues](#github.GitHubRequests.get_issues)
+  * [GitHubOrganization](#github.GitHubOrganization)
+    * [\_\_init\_\_](#github.GitHubOrganization.__init__)
+    * [list\_repositories](#github.GitHubOrganization.list_repositories)
+    * [get\_pull\_requests](#github.GitHubOrganization.get_pull_requests)
+    * [find](#github.GitHubOrganization.find)
+  * [GitHubRepository](#github.GitHubRepository)
+    * [\_\_init\_\_](#github.GitHubRepository.__init__)
+    * [list\_runs](#github.GitHubRepository.list_runs)
+    * [get\_run](#github.GitHubRepository.get_run)
+    * [cancel\_run](#github.GitHubRepository.cancel_run)
+    * [list\_commits](#github.GitHubRepository.list_commits)
+    * [get\_deploy\_keys](#github.GitHubRepository.get_deploy_keys)
+    * [add\_deploy\_key](#github.GitHubRepository.add_deploy_key)
+    * [add\_secret](#github.GitHubRepository.add_secret)
+    * [get\_commit](#github.GitHubRepository.get_commit)
+    * [get\_pull\_request](#github.GitHubRepository.get_pull_request)
+    * [pull\_request\_approved](#github.GitHubRepository.pull_request_approved)
+    * [browse](#github.GitHubRepository.browse)
+    * [list\_artifacts](#github.GitHubRepository.list_artifacts)
+    * [execute\_workflow](#github.GitHubRepository.execute_workflow)
+    * [export\_variables](#github.GitHubRepository.export_variables)
+    * [create\_pull\_request](#github.GitHubRepository.create_pull_request)
+
 <a id="github"></a>
 
 # github
@@ -130,6 +166,20 @@ List runners
 
 runner dict
 
+<a id="github.GitHubRequests.get_issues"></a>
+
+#### get\_issues
+
+```python
+def get_issues() -> dict
+```
+
+List issues
+
+**Returns**:
+
+issues dict
+
 <a id="github.GitHubOrganization"></a>
 
 ## GitHubOrganization Objects
@@ -145,7 +195,7 @@ Class to manage Organizations via GitHub API
 #### \_\_init\_\_
 
 ```python
-def __init__(token, organization, debug=False)
+def __init__(token: str, organization: str, debug: bool = False)
 ```
 
 Contructor
@@ -170,6 +220,44 @@ List organization repositories (generator to handle pagination)
 
 repository infos
 
+<a id="github.GitHubOrganization.get_pull_requests"></a>
+
+#### get\_pull\_requests
+
+```python
+def get_pull_requests(state: str, author: str = None) -> dict
+```
+
+Get pull requests at organization level
+
+**Arguments**:
+
+- `state`: Status (open, closed)
+- `author`: Author (GitHub login)
+
+**Returns**:
+
+GitHub API JSON Response
+
+<a id="github.GitHubOrganization.find"></a>
+
+#### find
+
+```python
+def find(pattern: str, path: str = None) -> dict
+```
+
+Get pull requests at organization level
+
+**Arguments**:
+
+- `state`: Status (open, closed)
+- `author`: Author (GitHub login)
+
+**Returns**:
+
+GitHub API JSON Response
+
 <a id="github.GitHubRepository"></a>
 
 ## GitHubRepository Objects
@@ -185,7 +273,7 @@ Class to manage Repositories via GitHub API
 #### \_\_init\_\_
 
 ```python
-def __init__(token, repository, debug=False)
+def __init__(token: str, repository: str, debug: bool = False)
 ```
 
 Contructor
@@ -256,6 +344,61 @@ List repository commits (generator to handle pagination)
 
 commit infos
 
+<a id="github.GitHubRepository.get_deploy_keys"></a>
+
+#### get\_deploy\_keys
+
+```python
+def get_deploy_keys() -> dict
+```
+
+Get the deploy keys in a repository
+
+**Returns**:
+
+Keys (JSON format)
+
+<a id="github.GitHubRepository.add_deploy_key"></a>
+
+#### add\_deploy\_key
+
+```python
+def add_deploy_key(title: str,
+                   content: str,
+                   write_access: bool = False) -> dict
+```
+
+Add a new deploy key in a repository
+
+**Arguments**:
+
+- `title`: Title
+- `content`: Key content
+- `write_access`: Allow write access
+
+**Returns**:
+
+Response (JSON format)
+
+<a id="github.GitHubRepository.add_secret"></a>
+
+#### add\_secret
+
+```python
+def add_secret(name: str, value: str) -> dict
+```
+
+Add Secret
+
+**Arguments**:
+
+- `name`: variable name to add
+- `value`: secret value
+
+**Returns**:
+
+Secret in JSON format
+
 <a id="github.GitHubRepository.get_commit"></a>
 
 #### get\_commit
@@ -273,6 +416,42 @@ Get the latest commit of a specific branch
 **Returns**:
 
 commit info (JSON format)
+
+<a id="github.GitHubRepository.get_pull_request"></a>
+
+#### get\_pull\_request
+
+```python
+def get_pull_request(number: int) -> dict
+```
+
+Get a specific pull request info
+
+**Arguments**:
+
+- `branch`: pull request number
+
+**Returns**:
+
+pull request info (JSON format)
+
+<a id="github.GitHubRepository.pull_request_approved"></a>
+
+#### pull\_request\_approved
+
+```python
+def pull_request_approved(number: int) -> bool
+```
+
+Get a list of pull requests reviewers
+
+**Arguments**:
+
+- `branch`: pull request number
+
+**Returns**:
+
+pull request reviewers (JSON format)
 
 <a id="github.GitHubRepository.browse"></a>
 
@@ -337,7 +516,7 @@ Run ID
 #### export\_variables
 
 ```python
-def export_variables(url: str, prefix: str, output: str)
+def export_variables(url: str, workflow: str, output: str, prefix: str = None)
 ```
 
 Extract variables from artifacts and fill a file with the variables
@@ -345,6 +524,31 @@ Extract variables from artifacts and fill a file with the variables
 **Arguments**:
 
 - `url`: Remote artifact URL
-- `prefix`: variable name prefix
+- `workflow`: variable name workflow
 - `output`: Local file name where the variables are exported
+- `prefix`: exported variable prefix
+
+<a id="github.GitHubRepository.create_pull_request"></a>
+
+#### create\_pull\_request
+
+```python
+def create_pull_request(branch: str,
+                        commit_message: str,
+                        files: dict,
+                        target_branch: str = None) -> str
+```
+
+Create a pull request
+
+**Arguments**:
+
+- `branch`: Source branch
+- `commit_message`: Commit message
+- `files`: Dict of {path: content}
+- `target_branch`: Destination branch (default: default branch)
+
+**Returns**:
+
+Pull Request URL
 
