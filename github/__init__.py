@@ -206,7 +206,8 @@ class GitHubOrganization(GitHubRequests):
         _query = {'state': state, 'type': 'pr', 'org': self.organization}
         if author:
             _query['author'] = author
-        return self._search_api("issues", _query)
+        _results = self._search_api("issues", _query)
+        return [_result for _result in _results if _result['locked'] is False]
 
     def find(self, pattern: str, path: str = None) -> dict:
         """Get pull requests at organization level
@@ -219,7 +220,7 @@ class GitHubOrganization(GitHubRequests):
                 _query['path'] = path
             else:
                 _query['filename'] = path
-        return self._search_api("code", _query)
+        return self._search_api("code", _query) 
 
 
 class GitHubRepository(GitHubRequests):
@@ -311,7 +312,6 @@ class GitHubRepository(GitHubRequests):
         :param value: secret value
         :returns: Secret in JSON format"""
         pkey = self._call_api("/actions/secrets/public-key")
-        print(pkey)
         _encrypted = self._encrypt(pkey['key'], value)
         self._call_api(
             f"/actions/secrets/{name}",

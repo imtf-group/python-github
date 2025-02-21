@@ -158,15 +158,15 @@ class InitTests(unittest.TestCase):
         mock_res_get = mock.Mock()
         mock_res_get.status_code = requests.codes.ok
         mock_res_get.json.side_effect = [
-            {'items': [{'state': 'open', 'id': 1}]},
-            {'items': [{'state': 'open', 'id': 2}]},
+            {'items': [{'state': 'open', 'id': 1, 'locked': False}, {'state': 'open', 'id': 3, 'locked': True}]},
+            {'items': [{'state': 'open', 'id': 2, 'locked': False}]},
             {'items': []}]
         mock_req = mock.Mock()
         mock_req.get.return_value = mock_res_get
         mock_req.codes.ok = 200
         with mock.patch('github.requests', mock_req):
             ghr = github.GitHubOrganization('TOKEN', 'imtf-devops')
-            self.assertEqual(ghr.get_pull_requests('open', 'toto'), [{'state': 'open', 'id': 1}, {'state': 'open', 'id': 2}])
+            self.assertEqual(ghr.get_pull_requests('open', 'toto'), [{'state': 'open', 'id': 1, 'locked': False}, {'state': 'open', 'id': 2, 'locked': False}])
             self.assertEqual(mock_req.get.mock_calls[0], mock.call(url='https://api.github.com/search/issues?q=state%3Aopen+type%3Apr+org%3Aimtf-devops+author%3Atoto&per_page=100&page=1', headers={'Authorization': 'Bearer TOKEN', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}, timeout=3))
 
     def test_add_repo_variable(self):
@@ -420,7 +420,7 @@ class InitTests(unittest.TestCase):
         mock_req.put.return_value = mock_res
         mock_req.codes.ok = 200
         with mock.patch('github.requests', mock_req):
-            ghr = github.GitHubRepository('TOKEN', 'imtf-devops/reponame', True)
+            ghr = github.GitHubRepository('TOKEN', 'imtf-devops/reponame')
             secret = ghr.add_secret("secret_name", "secret_value")
             mock_req.get.assert_called_once_with(url='https://api.github.com/repos/imtf-devops/reponame/actions/secrets/public-key', headers={'Authorization': 'Bearer TOKEN', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}, timeout=3)
             mock_req.put.assert_called_once_with(url='https://api.github.com/repos/imtf-devops/reponame/actions/secrets/secret_name', data=f'{{"encrypted_value": "{secret["encrypted_value"]}", "key_id": "3380204578043523366"}}', headers={'Authorization': 'Bearer TOKEN', 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}, timeout=3)
