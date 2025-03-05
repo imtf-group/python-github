@@ -41,7 +41,11 @@ class GitHubRequests:
         default_attrs = super().__dir__()
         return list(default_attrs) + list(self._content.keys())
 
-    def _prepare_url(self, resource: str = None, data: str = None) -> str:
+    def _prepare_url(self, resource: str = None, data: dict = None) -> dict:
+        """Prepare request (add headers, format body)
+        :param resource: GitHub api subresource
+        :param data: body to inject
+        :returns: Request dict"""
         url = "https://api.github.com"
         if resource is not None:
             resource = resource.replace('//', '/')
@@ -55,7 +59,7 @@ class GitHubRequests:
             },
             'timeout': 3}
         if data:
-            _retval['data'] = data
+            _retval['data'] = json.dumps(data)
         return _retval
 
     def _encrypt(self, public_key: str, secret_value: str) -> str:
@@ -67,7 +71,11 @@ class GitHubRequests:
         encrypted = sealed_box.encrypt(secret_value.encode("utf-8"))
         return base64.b64encode(encrypted).decode("utf-8")
 
-    def _execute_request(self, method: str, **kwargs) -> requests.Response:
+    def _execute_request(self, method: str, **kwargs) -> dict:
+        """Execute request and format Response
+        :param method: HTTP method
+        :param kwargs: requests arguments
+        :returns: Response JSON dict"""
         response = None
         if self.debug:
             print(f"call: {kwargs}")
@@ -78,9 +86,11 @@ class GitHubRequests:
             except requests.exceptions.ReadTimeout:
                 time.sleep(2)
         # pylint: disable=no-member
-        if response.status_code not in (requests.codes.ok, requests.codes.created):
-            response.raise_for_status()
-        _return_value = response.json()
+        response.raise_for_status()
+        if response.status_code == requests.codes.no_content:
+            _return_value = {}
+        else:
+            _return_value = response.json()
         if self.debug:
             print(f"response: {_return_value}")
         return _return_value
@@ -111,8 +121,6 @@ class GitHubRequests:
         :param data: Request body (if needed)
         :param method: Request method
         :returns: GitHub API JSON Response"""
-        if data:
-            data = json.dumps(data)
         _endpoint = self._endpoint
         if resource:
             _endpoint += f"/{resource}"
@@ -220,7 +228,7 @@ class GitHubOrganization(GitHubRequests):
                 _query['path'] = path
             else:
                 _query['filename'] = path
-        return self._search_api("code", _query) 
+        return self._search_api("code", _query)
 
 
 class GitHubRepository(GitHubRequests):
@@ -324,6 +332,12 @@ class GitHubRepository(GitHubRequests):
         :param branch: branch name
         :returns: commit info (JSON format)"""
         return self._call_api(f"/commits/{branch}")
+
+    def close_pull_request(self, number: int) -> dict:
+        """Get a specific pull request info
+        :param branch: pull request number
+        :returns: pull request info (JSON format)"""
+        return self._call_api(f"/pulls/{number}", {'state': 'closed'}, 'patch')
 
     def get_pull_request(self, number: int) -> dict:
         """Get a specific pull request info

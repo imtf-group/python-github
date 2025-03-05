@@ -430,11 +430,12 @@ class InitTests(unittest.TestCase):
         mock_res_get.status_code = requests.codes.ok
         mock_res_get.json.side_effect = [{'workflow_runs': [{'id': 0}]}, {'workflow_runs': []}, {'workflow_runs': [{'id': 0}, {'id': 1}]}, {'workflow_runs': []}, {'path': '.github/workflows/file.yaml'}]
         mock_res_post = mock.Mock()
-        mock_res_post.status_code = requests.codes.created
-        mock_res_post.json.return_value = {}
+        mock_res_post.status_code = requests.codes.no_content
+        mock_res_post.json.side_effect = requests.exceptions.JSONDecodeError("Error", '{"toto":}', 7)
         mock_req = mock.Mock()
         mock_req.get.return_value = mock_res_get
         mock_req.codes.ok = 200
+        mock_req.codes.no_content = 204
         mock_req.post.return_value = mock_res_post
         with mock.patch('time.sleep', mock.Mock()): 
             with mock.patch('github.requests', mock_req):
@@ -448,8 +449,7 @@ class InitTests(unittest.TestCase):
         mock_res_get.status_code = requests.codes.ok
         mock_res_get.json.side_effect = [{'workflow_runs': []}, {'workflow_runs': [{'id': 1}]}, {'workflow_runs': []}, {'path': '.github/workflows/file.yaml'}]
         mock_res_post = mock.Mock()
-        mock_res_post.status_code = requests.codes.created
-        mock_res_post.json.return_value = {}
+        mock_res_post.status_code = requests.codes.no_content
         mock_req_get = mock.Mock()
         mock_req_get.return_value = mock_res_get
         mock_req_post = mock.Mock()
@@ -466,8 +466,7 @@ class InitTests(unittest.TestCase):
         mock_res_get.status_code = requests.codes.ok
         mock_res_get.json.side_effect = [{'workflow_runs': []}, {'workflow_runs': [{'id': 1}]}, {'workflow_runs': []}, {'path': '.github/workflows/file.yaml'}]
         mock_res_post = mock.Mock()
-        mock_res_post.status_code = requests.codes.created
-        mock_res_post.json.return_value = {}
+        mock_res_post.status_code = requests.codes.no_content
         mock_req_get = mock.Mock()
         mock_req_get.return_value = mock_res_get
         mock_req_post = mock.Mock()
