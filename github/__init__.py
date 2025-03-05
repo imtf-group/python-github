@@ -48,8 +48,11 @@ class GitHubRequests:
         :returns: Request dict"""
         url = "https://api.github.com"
         if resource is not None:
-            resource = resource.replace('//', '/')
-            url += f"/{resource.replace(' ', '%20')}"
+            if resource.startswith('https://'):
+                url = resource
+            else:
+                resource = resource.replace('//', '/')
+                url += f"/{resource.replace(' ', '%20')}"
         _retval = {
             'url': url,
             'headers': {
@@ -132,6 +135,8 @@ class GitHubRequests:
         :param url: URL
         :param output_file: local file name"""
         _request = self._prepare_url(url)
+        if self.debug:
+            print(f"call: {_request}")
         response = requests.get(**_request)
         totalbits = 0
         if response.status_code == 200:
