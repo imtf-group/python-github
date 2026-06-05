@@ -26,6 +26,7 @@ class GitHubRequests:
         self._endpoint = endpoint
         self.debug = debug
         self._content = {}
+        self.timeout = 3
 
     def __getattr__(self, key):
         if not self._content:
@@ -60,7 +61,7 @@ class GitHubRequests:
                 'Accept': 'application/vnd.github+json',
                 'X-GitHub-Api-Version': '2022-11-28'
             },
-            'timeout': 3}
+            'timeout': self.timeout}
         if data:
             _retval['data'] = json.dumps(data)
         return _retval
@@ -198,7 +199,7 @@ class GitHubOrganization(GitHubRequests):
         :param organization: Organization name
         :param debug: Debug mode"""
         super().__init__(token, f"orgs/{organization}", debug)
-        self.organization = organization
+        self.name = organization
 
     def list_repositories(self) -> dict:
         """List organization repositories (generator to handle pagination)
@@ -208,7 +209,8 @@ class GitHubOrganization(GitHubRequests):
             _repos = self._call_api(f"/repos?per_page=100&page={_page}")
             if len(_repos) == 0:
                 break
-            yield from _repos
+            for _repo in _repos:
+                yield GitHubRepository(self._token, _repo['full_name'])
             _page += 1
 
     def get_pull_requests(self, state: str, author: str = None) -> dict:
@@ -216,7 +218,7 @@ class GitHubOrganization(GitHubRequests):
         :param state: Status (open, closed)
         :param author: Author (GitHub login)
         :returns: GitHub API JSON Response"""
-        _query = {'state': state, 'type': 'pr', 'org': self.organization}
+        _query = {'state': state, 'type': 'pr', 'org': self.name}
         if author:
             _query['author'] = author
         _results = self._search_api("issues", _query)
@@ -227,7 +229,7 @@ class GitHubOrganization(GitHubRequests):
         :param state: Status (open, closed)
         :param author: Author (GitHub login)
         :returns: GitHub API JSON Response"""
-        _query = {'': pattern, 'org': self.organization, 'in': 'file'}
+        _query = {'': pattern, 'org': self.name, 'in': 'file'}
         if path:
             if '/' in path:
                 _query['path'] = path
@@ -244,13 +246,13 @@ class GitHubRepository(GitHubRequests):
         :param repository: repository name
         :param debug: Debug mode"""
         super().__init__(token, f"repos/{repository}", debug)
-        self.repository = repository
+        self.name = repository
 
     def clone(self, destination: str = None, ref: str = None):
         """Clone a remote repository locally
         :param destination: local destination directory
         :param ref: remote branch or tag to clone"""
-        destination = destination or os.path.join(os.getcwd(), self.repository)
+        destination = destination or os.path.join(os.getcwd(), self.name)
         ref = ref or self.default_branch
         archive_dir = None
         with tempfile.NamedTemporaryFile(suffix=".zip") as temp_file:
@@ -274,6 +276,14 @@ class GitHubRepository(GitHubRequests):
                 break
             yield from _runs['workflow_runs']
             _page += 1
+
+    def get_users(self) -> dict:
+        """List users with access in a given repository"""
+        return self._call_api("/collaborators")
+
+    def delete_user(self, user: str) -> dict:
+        """List users with access in a given repository"""
+        return self._call_api(f"/collaborators/{user}", method="delete")
 
     def get_run(self, run_id: int) -> dict:
         """Get a specific repository action run
@@ -427,7 +437,7 @@ class GitHubRepository(GitHubRequests):
         :param workflow: variable name workflow
         :param output: Local file name where the variables are exported
         :param prefix: exported variable prefix"""
-        prefix = prefix or self.repository.split('/')[-1]
+        prefix = prefix or self.name.split('/')[-1]
         zip_file_name = f'{str(uuid.uuid4())}.zip'
         with tempfile.TemporaryDirectory() as tmpdirname:
             self.download(url, os.path.join(tmpdirname, zip_file_name))
